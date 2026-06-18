@@ -2,8 +2,10 @@ import sqlite3
 from aiogram import Bot, Dispatcher, types
 from aiogram.utils import executor
 
-TOKEN = "8792479401:AAEhv0Frjs-Vl-P2UYy1yGCMpFclKDpoKjk"
-ADMIN_ID = 8173198254
+# ---------------- TOKEN ----------------
+TOKEN = "YOUR_BOT_TOKEN"
+
+ADMINS = [8173198254, 8110699981]
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher(bot)
@@ -21,14 +23,6 @@ CREATE TABLE IF NOT EXISTS users (
 """)
 
 cursor.execute("""
-CREATE TABLE IF NOT EXISTS messages (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER,
-    text TEXT
-)
-""")
-
-cursor.execute("""
 CREATE TABLE IF NOT EXISTS blocked (
     user_id INTEGER PRIMARY KEY
 )
@@ -36,10 +30,9 @@ CREATE TABLE IF NOT EXISTS blocked (
 
 conn.commit()
 
-
-# ---------------- HELPERS ----------------
+# ---------------- FUNCTIONS ----------------
 def is_blocked(user_id):
-    cursor.execute("SELECT user_id FROM blocked WHERE user_id=?", (user_id,))
+    cursor.execute("SELECT 1 FROM blocked WHERE user_id=?", (user_id,))
     return cursor.fetchone() is not None
 
 
@@ -51,60 +44,89 @@ def add_user(user):
     conn.commit()
 
 
-def save_message(user_id, text):
-    cursor.execute("INSERT INTO messages (user_id, text) VALUES (?, ?)", (user_id, text))
-    conn.commit()
-
-
 # ---------------- START ----------------
 @dp.message_handler(commands=['start'])
 async def start(message: types.Message):
     add_user(message.from_user)
 
-    if message.from_user.id == ADMIN_ID:
+    if message.from_user.id in ADMINS:
         await message.answer("👑 پنل ادمین فعال شد")
     else:
-        await message.answer("👋 سلام! پیام بده")
+        keyboard = types.InlineKeyboardMarkup()
+        keyboard.add(
+            types.InlineKeyboardButton("📩 ارسال پیام", callback_data="send_again")
+        )
+        await message.answer("👋 سلام! پیام بده", reply_markup=keyboard)
 
 
-# ---------------- پیام کاربران ----------------
-@dp.message_handler()
-async def handle(message: types.Message):
+# ---------------- USER MESSAGE ----------------
+@dp.message_handler(lambda m: m.from_user.id not in ADMINS)
+async def user_message(message: types.Message):
 
-    user = message.from_user
-
-    if is_blocked(user.id):
+    if is_blocked(message.from_user.id):
         await message.answer("⛔ شما بلاک هستید")
         return
 
-    add_user(user)
-    save_message(user.id, message.text)
+    add_user(message.from_user)
 
     text = (
         f"📩 پیام جدید\n\n"
-        f"👤 {user.full_name}\n"
-        f"🆔 {user.id}\n"
+        f"👤 {message.from_user.full_name}\n"
+        f"🆔 {message.from_user.id}\n"
         f"💬 {message.text}"
     )
 
     keyboard = types.InlineKeyboardMarkup()
-
     keyboard.add(
-        types.InlineKeyboardButton("👤 پروفایل", callback_data=f"profile_{user.id}"),
-        types.InlineKeyboardButton("🚫 بلاک", callback_data=f"block_{user.id}")
+        types.InlineKeyboardButton("👤 پروفایل", callback_data=f"profile_{message.from_user.id}"),
+        types.InlineKeyboardButton("🚫 بلاک", callback_data=f"block_{message.from_user.id}")
+    )
+    keyboard.add(
+        types.InlineKeyboardButton("✅ آنبلاک", callback_data=f"unblock_{message.from_user.id}")
     )
 
-    await bot.send_message(ADMIN_ID, text, reply_markup=keyboard)
+    for admin in ADMINS:
+        await bot.send_message(admin, text, reply_markup=keyboard)
+
     await message.answer("✅ ارسال شد")
+
+
+# ---------------- ADMIN REPLY (REPLY METHOD) ----------------
+@dp.message_handler(lambda m: m.from_user.id in ADMINS)
+async def admin_reply(message: types.Message):
+
+    if not message.reply_to_message:
+        return
+
+    text = message.reply_to_message.text
+
+    if "🆔" not in text:
+        return
+
+    try:
+        user_id = int(text.split("🆔 ")[1].split("\n")[0])
+
+        await bot.send_message(
+            user_id,
+            f"📨 پاسخ ادمین:\n\n{message.text}",
+            reply_markup=types.InlineKeyboardMarkup().add(
+                types.InlineKeyboardButton("📩 ارسال پیام مجدد", callback_data="send_again")
+            )
+        )
+
+        await message.reply("✅ ارسال شد")
+
+    except:
+        await message.reply("❌ خطا در ارسال")
 
 
 # ---------------- CALLBACKS ----------------
 @dp.callback_query_handler()
-async def cb(call: types.CallbackQuery):
+async def callback(call: types.CallbackQuery):
 
     data = call.data
 
-    # 👤 پروفایل
+    # profile
     if data.startswith("profile_"):
         user_id = int(data.split("_")[1])
 
@@ -113,24 +135,34 @@ async def cb(call: types.CallbackQuery):
 
         if user:
             await call.message.answer(
-                f"👤 پروفایل\n\n"
-                f"🆔 {user[0]}\n"
-                f"نام: {user[1]}\n"
-                f"یوزرنیم: @{user[2]}"
+                f"👤 پروفایل\n\n🆔 {user[0]}\nنام: {user[1]}\nیوزرنیم: @{user[2]}"
             )
 
-    # 🚫 بلاک
+    # block
     elif data.startswith("block_"):
         user_id = int(data.split("_")[1])
 
-        cursor.execute("INSERT OR IGNORE INTO blocked (user_id) VALUES (?)", (user_id,))
+        cursor.execute("INSERT OR IGNORE INTO blocked VALUES (?)", (user_id,))
         conn.commit()
 
-        await call.message.answer(f"⛔ کاربر {user_id} بلاک شد")
+        await call.message.answer("⛔ بلاک شد")
+
+    # unblock
+    elif data.startswith("unblock_"):
+        user_id = int(data.split("_")[1])
+
+        cursor.execute("DELETE FROM blocked WHERE user_id=?", (user_id,))
+        conn.commit()
+
+        await call.message.answer("✅ آنبلاک شد")
+
+    # send again
+    elif data == "send_again":
+        await call.message.answer("✍️ پیام جدیدت رو بنویس و ارسال کن")
 
     await call.answer()
 
 
-# ---------------- اجرا ----------------
+# ---------------- RUN ----------------
 if __name__ == "__main__":
     executor.start_polling(dp, skip_updates=True)
