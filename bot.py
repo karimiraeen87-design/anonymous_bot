@@ -3,7 +3,7 @@ from aiogram import Bot, Dispatcher, types
 from aiogram.utils import executor
 
 # ---------------- TOKEN ----------------
-TOKEN = "YOUR_BOT_TOKEN"
+TOKEN = "8792479401:AAEhv0Frjs-Vl-P2UYy1yGCMpFclKDpoKjk"
 
 ADMINS = [8173198254, 8110699981]
 
