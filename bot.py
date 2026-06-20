@@ -3,7 +3,7 @@ from aiogram import Bot, Dispatcher, types
 from aiogram.utils import executor
 
 # ---------------- TOKEN ----------------
-TOKEN = "8792479401:AAEhv0Frjs-Vl-P2UYy1yGCMpFclKDpoKjk"
+TOKEN = "8792479401:AAGEATw7KV2yx5DMXVLew_m6jpy44ju2Ndc"
 
 ADMINS = [8173198254, 8110699981]
 
@@ -56,7 +56,17 @@ async def start(message: types.Message):
         keyboard.add(
             types.InlineKeyboardButton("📩 ارسال پیام", callback_data="send_again")
         )
-        await message.answer("👋 سلام! پیام بده", reply_markup=keyboard)
+        await message.answer(
+    f"""سلام {message.from_user.first_name} 👋
+
+به صندوق پیام ناشناس خوش اومدی.
+
+📩 پیام‌های تو بدون نمایش هویت مستقیم ارسال می‌شن.
+🔒 اینجا همه چیز محرمانه و ناشناسه.
+
+فقط پیامتو بنویس و ارسال کن.""",
+    reply_markup=keyboard
+)
 
 
 # ---------------- USER MESSAGE ----------------
